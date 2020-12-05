@@ -122,7 +122,24 @@ const addOrEditContact = contactObject => {
 ### useEffect
 `useState` helps us to create state variables whereas `useEffect` allows us to create callbacks for when the state changes.
 
-`useEffect` is called after the DOM is rendered. It is similar to componentDidMount for class components when used like this - without a second argument, just a callback:
+`useEffect` is called after the DOM is rendered. It is similar to componentDidMount for class components when used like this - with an empty array as a second argument, just a callback:
+
+```jsx
+import React, {useState, useEffect} from 'react';
+
+const SomeComponent = () => {
+    var [x, setX] = useState(0);
+
+    // useEffect(callbackFunc, [stateVars])
+    useEffect(() => {
+        // do something
+    }, [])
+    
+}
+
+```
+
+`useEffect` can also be caused upon every single rerender when used like this, with no second argument:
 
 ```jsx
 import React, {useState, useEffect} from 'react';
@@ -135,9 +152,6 @@ const SomeComponent = () => {
         // do something
     })
     
-    return (
-        <React.Fragment></React.Fragment>
-    )
 }
 
 ```

@@ -13,10 +13,8 @@ const Contacts = () => {
     useEffect(() => {
         firebaseDb.child('contacts').on('value', snapshot => {
             if (snapshot.val()) {
-                setContactObjects({
-                    contactObjects,
-                    ...snapshot.val()
-                })
+                // ! this causes re-render
+                setContactObjects(snapshot.val())
             }
         })
     }, [])
@@ -30,6 +28,7 @@ const Contacts = () => {
 
     return (
         <React.Fragment>
+        {console.log(contactObjects)}
             <div className="jumbotron jumbotron-fluid">
                 <div className="container">
                     <h1 className="display-4 text-center">Contact Register</h1>
@@ -37,7 +36,7 @@ const Contacts = () => {
             </div>
             <div className="row">
                 <div className="col-md-5">
-                    <ContactForm {...{}} />
+                    <ContactForm {...{addOrEditContact, contactObjects, currentContactId}} />
                 </div>
                 <div className="col-md-7">
                     <table className="table table-borderless table-striped">
