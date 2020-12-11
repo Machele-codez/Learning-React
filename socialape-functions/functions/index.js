@@ -82,7 +82,50 @@ app.post("/signup", (request, response) => {
         handle: request.body.handle,
     };
 
-    // ? Validate data
+    // * VALIDATION
+
+    // ? errors Object
+    let errors = {};
+
+    // ? helper functions
+    // check if a string is empty
+    const isEmpty = string => {
+        if (string.trim() === "") return true;
+        return false;
+    };
+
+    // check if email is valid
+    const isEmail = email => {
+        const emailRegEx = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+        if (email.match(emailRegEx)) return true;
+        return false;
+    };
+
+    // ? email validation
+    // check for empty email input
+    if (isEmpty(newUser.email)) errors.email = "Must not be empty";
+    // check for valid email
+    else if (!isEmail(newUser.email))
+        errors.email = "Must be a valid email address";
+
+    // ? password validation
+    // check for empty password input
+    if (isEmpty(newUser.password)) errors.password = "Must not be empty";
+    // check password length
+    else if (newUser.password.length < 6) errors.password = "Must exceed 6 characters";
+   
+    // check for matching password and confirm password fields
+    if (newUser.password !== newUser.confirmPassword)
+        errors.confirmPassword = "Passwords must match";
+
+    // ? handle validation
+    // check for empty handle input value
+    if (isEmpty(newUser.handle)) errors.handle = "Must not be empty";
+
+    // ? check if all validation is successful before proceeding
+    if (Object.keys(errors).length > 0)
+        return response.status(400).json(errors);
+
     let token; //  auth token to be generated after sign up
     let userId;
 

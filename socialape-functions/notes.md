@@ -362,6 +362,7 @@ Then we store the user's auth token in a variable, and create a document in the 
 });
 ```
 
-
+### Data Validation
+This is done using helper functions just for cleaner code. Then all field errors are returned in an `errors` object. The validation is done in the backend - Cloud functions.
 
 ### Authentication
