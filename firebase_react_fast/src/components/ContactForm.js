@@ -23,9 +23,23 @@ const ContactForm = (props) => {
     const handleFormSubmit = e => {
         e.preventDefault();
         props.addOrEditContact(values);
-        
+        setValues(initialFieldValues);
     }
 
+    // hook that populates form depending on whether a contact has been selected for edit
+    React.useEffect(() => {
+        // if a contact has been selected to edit
+        // thus, the state variable currentContactID has been populated with that contact's ID
+        // then set the form field values using that contact's details
+        if (props.currentContactID)
+            setValues({
+                ...props.contactObjects[props.currentContactID]
+            })
+        // else reset the form field values
+        else
+            setValues(initialFieldValues)
+    }, [props.contactObjects, props.currentContactID])
+    
     return (
         <form autoComplete="off" onSubmit={handleFormSubmit}>
             <div className="form-group input-group">
@@ -78,8 +92,8 @@ const ContactForm = (props) => {
             </div>
             <div className="form-group">
                  <input type="submit"
-                 className="btn btn-primary btn-block" 
-                    value="Save"
+                    className={ (props.currentContactID ? "btn-success" : "btn-primary") + " btn btn-block" } 
+                    value={ props.currentContactID ? "Update" : "Save" }
                  />
             </div>
 

@@ -83,6 +83,9 @@ app.post("/signup", (request, response) => {
     };
 
     // ? Validate data
+    let token; //  auth token to be generated after sign up
+    let userId;
+
     // get document corresponding to the new user's handle
     db.doc(`/users/${newUser.handle}`)
         .get()
@@ -106,15 +109,30 @@ app.post("/signup", (request, response) => {
         })
         // if the user is successfully created, generate auth token
         .then(data => {
+            userId = data.user.uid;
             return data.user.getIdToken();
         })
-        // send auth token back in response
-        .then(token => {
-            return response.status(201).json({ token });
+        // send auth token back in response and add extra user data to Firestore 'users' collection
+        .then(userAuthToken => {
+            token = userAuthToken;
+            const userData = {
+                handle: newUser.handle,
+                email: newUser.email,
+                createdAt: new Date().toISOString(),
+                userId,
+            };
+            return db.doc(`/users/${userData.handle}`).set(userData);
         })
+        .then(() => response.status(201).json({ token }))
         // catch errors
         .catch(error => {
             console.error(error);
+            // handle existing email error
+            if (error.code === "auth/email-already-in-use")
+                return response
+                    .status(400)
+                    .json({ email: "email already in use" });
+            // other errors
             return response.status(500).json({ error: error.code });
         });
 });

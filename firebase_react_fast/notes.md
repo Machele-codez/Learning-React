@@ -264,15 +264,94 @@ We provide action buttons for update and delete (pencil and trash can icons) bes
 So first, we create a new state variable to hold the current id of the record (contact) which is currently open for editing or deletion. Then we let the click event handler for the pencil button set that state variable to the id of the contact where it was clicked. 
 ```jsx
 // contact ID state variable
-var [currentContactId, setcurrentContactId] = useState('');
+var [currentContactId, setCurrentContactID] = useState('');
 
 // Pencil HTML Element
-<a className="btn text-primary" onClick={setcurrentContactId(id)}>
+<a className="btn text-primary" onClick={() => setCurrentContactID(id)}>
     <i className="fas fa-pencil-alt"></i>
 </a>
 ```
 
-Then in order to populate the form, we pass the current id and contactObjects collection as props. Props can also be passed using jsx syntax.
+I ran into an error here herh! I mistakenly passed a function call to the event handler instead of a reference (using an anonymous function to return the event handler function);
 ```jsx
+// WRONG
+<a className="btn text-primary" onClick={ setCurrentContactID(id) }>
+    <i className="fas fa-pencil-alt"></i>
+</a>
+// WRONG
+```
+So what did it cause? 
+Well, the supposed event handler function, setCurrentContactID, was called on each render, which caused another render eventually resulting in an infinite loop.
+
+Then in order to populate the form, we pass the current id and contactObjects collection as props. Props can also be passed as a javascript Object - using jsx syntax.
+```jsx
+<ContactForm {...{ addOrEditContact, contactObjects, currentContactId }} />
+```
+
+Then we define a useEffect hook in the contactForm component. This hook is triggered when the `contactObjects` or `currentContactId` props change. If so, then it first does a further check. If `currentContactId` is an empty string, then the `contactForm` is populated with the initial field values (which are actually empty values). But if the current contact ID has been set to some value then we populate `contactForm` using values from `props.contactObjects[props.currentContactId]`. That is, values from the contact object within `props.contactObjects` that has the id, `currentContactId`.
+
+```jsx
+// hook that populates form depending on whether a contact has been selected for edit
+React.useEffect(() => {
+    // if a contact has been selected to edit
+    // thus, the state variable currentContactID has been populated with that contact's ID
+    // then set the form field values using that contact's details
+    if (props.currentContactID)
+        setValues({
+            ...props.contactObjects[props.currentContactID]
+        })
+    // else reset the form field values
+    else
+        setValues(initialFieldValues)
+}, [props.contactObjects, props.currentContactID])
+```
+
+The submit button's value is also changed programmatically to "Update", as well as its style.
+
+```jsx
+<input type="submit"
+        className={ (props.currentContactID ? "btn-success" : "btn-primary") + " btn btn-block" } 
+        value={ props.currentContactID ? "Update" : "Save" }
+/>
+```
+
+Then once the edit is done, the user clicks the "Update" button. This triggers the form to submit, hence, calling the `addOrEditContact` function. This `addOrEditContact` function needs to be updated since its current state only adds contacts to the DB without checking if they already exist. So we perform a check. If current id is empty, then we assume a new contact is being added, else, we assume an edit.
+
+```jsx
+// add or edit a contact - DB operation
+const addOrEditContact = contactObject => {
+    // edit existing contact
+    if (currentContactID)
+        firebaseDb.child(`contacts/${currentContactID}`).set(contactObject, error => {
+            if (error) console.log(error)
+            // if contact is edited successfully, reset currentContactID state variable
+            else setcurrentContactID('')
+        })
+    // add new contact
+    else
+        firebaseDb.child('contacts').push(contactObject, error => {
+            if (error) console.log(error)
+        })
+}
+
+``` 
+
+## Deleting Records
+This wouldn't use the `currentContactID` state variable. Instead, the trash icon's onclick event is handled by a function, `deleteContact`. This takes a single argument, the contact id.
+
+```jsx
+// delete contact
+const deleteContact = contactID => {
+    // confirm delete action
+    if (window.confirm("Are you sure you want to delete this contact?")) {
+        // delete from DB
+        firebaseDb.child(`contacts/${contactID}`).remove(error => {
+            error ? console.log(error) : setcurrentContactID('')
+        })
+    }
+}
 
 ```
+It was necessary to define the `confirm` using `window.confirm` in order to prevent an error saying that `Unexpected use of 'confirm'  no-restricted-globals`.
+
+ALHAMDU liLlah
