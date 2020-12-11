@@ -73,6 +73,20 @@ app.post("/scream", (request, response) => {
         });
 });
 
+// TODO validation helper functions
+// check if a string is empty
+const isEmpty = string => {
+    if (string.trim() === "") return true;
+    return false;
+};
+
+// check if email is valid
+const isEmail = email => {
+    const emailRegEx = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+    if (email.match(emailRegEx)) return true;
+    return false;
+};
+
 // TODO signup route
 app.post("/signup", (request, response) => {
     const newUser = {
@@ -87,20 +101,6 @@ app.post("/signup", (request, response) => {
     // ? errors Object
     let errors = {};
 
-    // ? helper functions
-    // check if a string is empty
-    const isEmpty = string => {
-        if (string.trim() === "") return true;
-        return false;
-    };
-
-    // check if email is valid
-    const isEmail = email => {
-        const emailRegEx = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-        if (email.match(emailRegEx)) return true;
-        return false;
-    };
-
     // ? email validation
     // check for empty email input
     if (isEmpty(newUser.email)) errors.email = "Must not be empty";
@@ -112,8 +112,9 @@ app.post("/signup", (request, response) => {
     // check for empty password input
     if (isEmpty(newUser.password)) errors.password = "Must not be empty";
     // check password length
-    else if (newUser.password.length < 6) errors.password = "Must exceed 6 characters";
-   
+    else if (newUser.password.length < 6)
+        errors.password = "Must exceed 6 characters";
+
     // check for matching password and confirm password fields
     if (newUser.password !== newUser.confirmPassword)
         errors.confirmPassword = "Passwords must match";
@@ -122,7 +123,7 @@ app.post("/signup", (request, response) => {
     // check for empty handle input value
     if (isEmpty(newUser.handle)) errors.handle = "Must not be empty";
 
-    // ? check if all validation is successful before proceeding
+    // ? return errors if any
     if (Object.keys(errors).length > 0)
         return response.status(400).json(errors);
 
@@ -176,6 +177,39 @@ app.post("/signup", (request, response) => {
                     .status(400)
                     .json({ email: "email already in use" });
             // other errors
+            return response.status(500).json({ error: error.code });
+        });
+});
+
+// TODO login route
+app.post("/login", (request, response) => {
+    const user = {
+        email: request.body.email,
+        password: request.body.password,
+    };
+
+    let errors = {};
+
+    // ? validate inpute values
+    if (isEmpty(user.email)) errors.email = "Must not be empty";
+    if (isEmpty(user.password)) errors.password = "Must not be empty";
+
+    // ? return errors
+    if (Object.keys(errors).length > 0)
+        return response.status(400).json(errors);
+
+    firebase
+        .auth()
+        .signInWithEmailAndPassword(user.email, user.password)
+        .then(userCreds => userCreds.user.getIdToken())
+        .then(token => response.status(200).json({ token }))
+        .catch(error => {
+            console.error(error);
+            if (error.code === "auth/wrong-password")
+                return response
+                    .status(403)
+                    .json({ general: "Wrong credentials, please try again" });
+
             return response.status(500).json({ error: error.code });
         });
 });

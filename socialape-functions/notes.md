@@ -288,7 +288,7 @@ const db = admin.firestore();
 db.doc(`/users/${newUser.handle}`).get();
 ```
 
-This tries to access the document with id of `newUser.handle` within the `/users` collection. `db.doc('path').get()` returns a DocumentSnapshot whether or not the document at the specified path exists. So we call a `.then()` which takes the snapshot, represented with `doc`, as an argument to do further checking. From there, within `.then()` we check if the document really exists in the database using `doc.exists` which returns a Boolean. So if the document exists, we return an error response informing that the handle has been taken. 
+This tries to access the document with id of `newUser.handle` within the `/users` collection. `db.doc('path').get()` returns a DocumentSnapshot whether or not the document at the specified path exists. So we call a `.then()` which takes the snapshot, represented with `doc`, as an argument to do further checking. From there, within `.then()` we check if the document really exists in the database using `doc.exists` which returns a Boolean. So if the document exists, we return an error response informing that the handle has been taken.
 
 Our error responses for particular form fields would have the name of the form field as key, and the error message as value.
 `{ fieldName: "Error message" }`
@@ -357,12 +357,15 @@ Then we store the user's auth token in a variable, and create a document in the 
     // handle existing email error
     if (error.code === "auth/email-already-in-use")
         return response.status(400).json({email: "email already in use"})
-    // other errors 
+    // other errors
     return response.status(500).json({ error: error.code });
 });
 ```
 
 ### Data Validation
+
 This is done using helper functions just for cleaner code. Then all field errors are returned in an `errors` object. The validation is done in the backend - Cloud functions.
 
 ### Authentication
+
+Logging in is done using `firebase.auth().signInWithEmailAndPassword(email, password)`. It also returns a promise of type `<UserCredentials>` just like `firebase.auth().createUserWithEmailAndPassword`. This `<UserCredentials>` contains the `user` property from which a token can be generated using `user.getIdToken()`.
