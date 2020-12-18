@@ -366,6 +366,67 @@ Then we store the user's auth token in a variable, and create a document in the 
 
 This is done using helper functions just for cleaner code. Then all field errors are returned in an `errors` object. The validation is done in the backend - Cloud functions.
 
-### Authentication
+### Logging In
 
 Logging in is done using `firebase.auth().signInWithEmailAndPassword(email, password)`. It also returns a promise of type `<UserCredentials>` just like `firebase.auth().createUserWithEmailAndPassword`. This `<UserCredentials>` contains the `user` property from which a token can be generated using `user.getIdToken()`.
+
+### Authentication Middleware
+
+Right now, anyone at all can post screams to our DB and can read the screams too. But we don't want that. We want to protect these and probably some other routes. We need to intercept the incoming requests, check a few things, then decide whether to accept the request or not. This kind of functionality is called **middleware**.
+So in our case we want to add some authentication middleware to some routes to make sure that the user sending who sends a request to those routes is authenticated. Express allows us to do this by inserting our middleware, essentially some function(s), as an argument after the request path. Keep in mind that the function that takes just `request` and `response` as parameters and returns response objects is also middleware.
+
+> Middleware functions are functions that have access to the request object (req), the response object (res), and the next middleware function in the application’s request-response cycle. The next middleware function is commonly denoted by a variable named next. If the current middleware function does not end the request-response cycle, it must call next() to pass control to the next middleware function. Otherwise, the request will be left hanging.
+
+```js
+app = require("express")();
+
+app.post(
+    "/somepath", // path
+    myMiddlewareFunc, // middleware
+    (req, resp) => resp.json({}) // this is also middleware
+);
+```
+
+Our middleware function will check for the existence of the Bearer Authorization header. If it is not present then a 403 error is returned. If it exists the token would be extracted from it. Then we call `admin.auth().verifyIdToken(extractedToken)` which
+
+> verifies a Firebase ID token (JWT). If the token is valid, the promise is fulfilled with the token's decoded claims; otherwise, the promise is rejected. An optional flag can be passed to additionally check whether the ID token was revoked.
+> Then within a `.then()` we extract user data from the decoded token and add it to the request object. What do we add? First we add a `user` property to request and assign it the value of the decoded token. Then we also need to add the user's handle to the request object but the handle is not stored in the token's claims. So, using the user's uid, we make a DB call to the collection in firestore that holds extra user data. From there we get the user handle and add it as a property to `request.user` so it will be like `request.user.handle`.
+
+```js
+// verify token
+admin
+    .auth()
+    .verifyIdToken()
+    .then(decodedToken => {
+        // add token to request object
+        request.user = decodedToken;
+
+        // getting user handle from DB - user handle is stored in a Firestore collection, not part of the decoded token
+        return db
+            .collection("/users")
+            .where("userId", "==", request.user.uid)
+            .limit(1)
+            .get();
+    })
+    .then(data => {
+        // adding handle property to request.user
+        request.user.handle = data.docs[0].data().handle;
+        return next();
+    });
+```
+
+`data.docs` will be an array of the single document that matched the query.
+
+`data.docs[0].data()` returns the fields of the document as an Object.
+
+Now that the user's handle is part of the request object, we can extract it for use within our route that is responsible for posting screams. We assign the userHandle field of the new scream to `request.user.handle`.
+
+## Refactoring and Organising our Code Structure
+
+We create the directories under `socialape-functions/functions`. We create a `handlers` directory to keep our route handlers, `util` to keep our utilities.
+
+```js
+exports.funcName = () => {};
+// is same as
+export const funcName = () => {};
+```
