@@ -14,7 +14,7 @@ exports.getAllScreams = (request, response) => {
             data.forEach(doc => {
                 screams.push({
                     screamID: doc.id, // id of the document - actually the scream id
-                    ...doc.data(),
+                    ...doc.data()
                 });
             });
             // return Array of documents

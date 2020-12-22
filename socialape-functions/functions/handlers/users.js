@@ -22,6 +22,8 @@ exports.signup = (request, response) => {
 
     let token; //  auth token to be generated after sign up
     let userId;
+    
+    const blankProfileImage = "blank-profile-picture.png";
 
     // get document corresponding to the new user's handle
     db.doc(`/users/${newUser.handle}`)
@@ -57,6 +59,7 @@ exports.signup = (request, response) => {
                 email: newUser.email,
                 createdAt: new Date().toISOString(),
                 userId,
+                imageURL: `https://firebasestorage.googleapis.com/v0/b/${config.storageBucket}/o/${blankProfileImage}?alt=media`
             };
             return db.doc(`/users/${userData.handle}`).set(userData);
         })
@@ -111,7 +114,7 @@ exports.uploadImage = (request, response) => {
     const busboy = new BusBoy({ headers: request.headers });
     
     let imageFileName, imageToBeUploaded = {};
-
+    
     busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
         console.log(fieldname);
         console.log(filename);
@@ -126,11 +129,11 @@ exports.uploadImage = (request, response) => {
         // create a path to the file in-memory using tmpdir
         const filepath = path.join(os.tmpdir(), imageFileName);
         
-        imageToBeUploaded = {filepath, mimetype}
+        imageToBeUploaded = { filepath, mimetype };
         
         file.pipe(fs.createWriteStream(filepath))
     });
-
+    
     busboy.on('finish', () => {
         // upload image to storage
         admin.storage().bucket().upload(imageToBeUploaded.filepath, {
@@ -145,7 +148,7 @@ exports.uploadImage = (request, response) => {
         .then(() => {
             const imageURL = `https://firebasestorage.googleapis.com/v0/b/${config.storageBucket}/o/${imageFileName}?alt=media`;
             
-            return db.doc().collection(`/users/${request.user.handle}`).update({ imageURL });
+            return db.doc(`/users/${request.user.handle}`).update({ imageURL });
         })
         .then(() => {
             return response.json({message: "Image uploaded successfully"})
@@ -155,4 +158,8 @@ exports.uploadImage = (request, response) => {
             return response.status(500).json({ error: error.code })
         })
     })
+
+    // required to end
+    // ! prevents an unending request
+      busboy.end(request.rawBody);
 };
