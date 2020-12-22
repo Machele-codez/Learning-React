@@ -430,3 +430,134 @@ exports.funcName = () => {};
 // is same as
 export const funcName = () => {};
 ```
+
+## User Profile Image upload with Busboy
+
+So we create a post route for this too. And our handler responsible for uploading our image will use an npm package called `busboy`. We'll also need a few other packages so within our handler we'd have;
+
+```js
+const BusBoy = require("busboy");
+const path = require("path");
+const os = require("os");
+const fs = require("fs");
+```
+
+Busboy is an npm package that parses HTML form data. For starters, we need to initialize it to be able to use it. This is done by creating a new instance of `BusBoy` and passing the request's headers as the `options` parameter.
+
+```js
+const busboy = new BusBoy({ headers: request.headers });
+```
+
+### Preparing for Upload
+
+Busboy can be used to access form data for both form file input fields and form non-file input fields. Busboy uses its own events to access the form data. For file input fields, the `file` event is triggered for each file input field whereas for non-file input fields such as text and email, the `field` event is triggered.
+
+In our case we'll be working with the `file` event since we are uploading an image. So when it is triggered we have access to some 5 parameters that are passed with the event. Our `file` event handler can access the `fieldname`, `file`, `filename`, `encoding`, and `mimetype` parameters of the file from the form input.
+
+-   _fieldname_: The `name` attribute of the HTML form's input field via which the file is uploaded.
+-   _file_: Represents the actual file that was placed in the form's input field. This parameter actually represents a `stream`.
+-   _filename_: Name of the uploaded file.
+-   _encoding_: file encoding.
+-   _mimetype_: mimetype.
+
+```js
+busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {});
+```
+
+Though we might not use the `encoding` parameter, its better to leave it there since we are using positional arguments.
+
+When uploading our image to Google Cloud Storage, we'll need:
+
+-   the file path to specify the file to be uploaded
+-   mimetype to specify the file's type.
+    Therefore, we need to prepare those two first. And the place we have access to these requirements is within our `file` event handler.
+
+So, we need to prepare a file that would contain the same contents as the file the user uploaded through the HTML form. This is because we need a filepath to be able to upload a file. But the user-uploaded file has no path. So first we get the file extension like this:
+
+```js
+// Well, we split the file name of the image (which is a string) and get the last element of the Array.
+const imageExtension = filename.split(".")[filename.split(".").length - 1];
+```
+
+Then we can give the file a random name and add its extension.
+
+```js
+const imageFileName = `${Math.round(
+    Math.random() * 10000000000
+)}.${imageExtension}`;
+```
+
+Now let's create a path where our file will reside. Since we are using Google Cloud Functions, our only option, where we can write info to, is an in-memory directory called `/tmp`. So we access it using `os.tmpdir()`. So now that we have a temporary directory to store the file, we complete the path by adding the filename we created. This is done using `path.join()`.
+
+```js
+const filepath = path.join(os.tmpdir(), imageFileName);
+```
+
+Now we have only created a file path on GCF's memory with no actual file yet, we need the uploaded file to actually exist in that path. So what we do is to pipe the readable uploaded file stream into a writable stream on that path.
+
+What is a stream, piping?
+
+Well, in Node JS a stream represents a lot of stuff such as HTTP requests and responses, files, stdin, stderr, stdout, etc. These streams can either be readable, writable, duplex, or transform. So you get the meaning. The streams API allows us to write all data from one readable stream to a writable stream via a method called `piping`.
+
+How does this help us?
+
+In our case, the user-uploaded file is a readable stream. And we can create a writable stream in our temporary path using
+`fs.createWriteStream`. So we create a writable stream with our created filename and path and then pipe the uploaded file into the newly created stream.
+
+```js
+uploadedFile.pipe(fs.createWriteStream(tempFilePath));
+
+// or much simpler
+// creating a writable stream
+const tempFileStream = fs.createWriteStream(tempFilePath);
+// pipe uploaded file into writable stream
+uploadedFile.pipe(tempFileStream);
+```
+
+Then we store the required parameters for the Google Cloud Storage upload, the file name and mimetype, in an object for later access.
+
+```js
+imageToBeUploaded = { filepath, mimetype };
+```
+
+### Uploading file to Storage Bucket
+
+Now that we have what is necessary, we create another event handler within which we actually perform the file upload. This event is the busboy's `finish` event. It is triggered after the data has been parsed by the `field` and `file` event handlers. Here, we make a call to our storage bucket with the filepath of the image to be uploaded.
+
+```js
+admin
+    .storage()
+    .bucket()
+    .upload(imageToBeUploaded.filepath, {
+        resumable: false,
+        metadata: {
+            metadata: {
+                contentType: imageToBeUploaded.mimetype,
+            },
+        },
+    });
+```
+Then on a successful upload, we add the URL to the image (which is the user's profile image) to the user's firestore instance.
+```js
+.then(() => {
+    const imageURL = `https://firebasestorage.googleapis.com/v0/b/${config.storageBucket}/o/${imageFileName}?alt=media`;
+    
+    return db.doc().collection(`/users/${request.user.handle}`).update({ imageURL });
+    // The reason why we can access request.user from here is that this route also uses
+    // the firebase authentication middleware we built in which we define request.user
+})
+``` 
+
+And then
+
+```js
+.then(() => {
+    return response.json({message: "Image uploaded successfully"})
+})
+.catch(error => {
+    console.error(error);
+    return response.status(500).json({ error: error.code })
+})
+```
+
+We have been able to copy the uploaded file into a memory location of our cloud function. Then from that memory location, we upload the file to Google Cloud Storage. Finish!
