@@ -103,7 +103,7 @@ SyntaxError: Unexpected token *
     ...
 ```
 
-This is definitely not from me. It has to be an error from the firestore package itself. So what did I do? I had to downgrade my `firebase-admin` and `firebase-functions` to a version that didn't have these bugs. Thanks to [Marcel Hoekstra](https://stackoverflow.com/questions/64575650/firebase-functions-error-after-update-what-can-i-do#comment114208082_64575650).
+This is definitely not from me. It has to be an error from the firestore package itself. So what did I do? I had to downgrade my `firebase-admin` and `firebase-functions` to a version that didn't have these bugs (firebase-admin: ^8.10.0, firebase-functions: ^3.6.1). Thanks to [Marcel Hoekstra](https://stackoverflow.com/questions/64575650/firebase-functions-error-after-update-what-can-i-do#comment114208082_64575650).
 
 ## Creating A Scream
 
@@ -537,7 +537,9 @@ admin
         },
     });
 ```
-Then on a successful upload, we add the URL to the image (which is the user's profile image) to the user's firestore instance.
+
+Then on a successful upload, we update the user's Firestore instance's imageURL field to the URL of the uploaded image in the storage bucket (which is the user's profile image).
+
 ```js
 .then(() => {
     const imageURL = `https://firebasestorage.googleapis.com/v0/b/${config.storageBucket}/o/${imageFileName}?alt=media`;
@@ -559,5 +561,12 @@ And then
     return response.status(500).json({ error: error.code })
 })
 ```
+
+Finally to finish the whole process we add:
+
+```js
+busboy.end(request.rawBody);
+```
+Since busboy itself is also a stream, the `busboy.end(request.rawBody)` writes `request.rawBody` as the last thing to the busboy stream and then denies further writing. It is necessary because when I omitted it the request kept on pending. 
 
 We have been able to copy the uploaded file into a memory location of our cloud function. Then from that memory location, we upload the file to Google Cloud Storage. Finish!
