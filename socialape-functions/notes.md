@@ -188,7 +188,6 @@ app.get("/screams", (request, response) => {
 exports.api = functions.https.onRequest(app);
 ```
 
-You can call `orderBy` off a collection to order it by a particular field within its documents. By default it orders in ascending order.
 
 ```js
 admin.firestore().collection("collection_name").orderBy("fieldName", "desc");
@@ -653,4 +652,56 @@ db.collection("likes")
         return response.json(userDetails).status(200);
     });
 ```
+
 Remember to handle errors using `.catch()`
+
+## Get a Single Scream
+
+To get a single scream we'll need an identifier to specify the scream. So we pass that as a URL parameter in our express route.
+
+```js
+app.get("/scream/:screamId", getScream);
+```
+
+As seen, `:screamId` above is the name of the URL parameter. This will not be a protected route since there is no need for that.
+
+Let's move on to the route handler definition.
+
+We first of all define an empty object, `screamData`, to hold the data to be retrieved. Then, we make a call to get the scream data using the scream id passed as a URL parameter.
+
+```js
+let screamData = {};
+
+db.doc(`/screams/${request.params.screamId}`)
+    .get()
+    .then(doc => {
+        if (!doc.exists)
+            return response
+                .status(404)
+                .json({ message: "Scream not found" });
+
+        screamData = doc.data();
+        screamData.screamId = doc.id;
+    }
+```
+
+Now, to get the comments on the scream, we make a separate call to the 'comments' collection which is also a separate one. Then we filter our query to match the comments that have their 'screamId' fields matching with the scream id passed in the URL. The comments are sorted by the date they were created, 'createdAt'. So the returned comments are pushed into the `screamData` object as well.
+
+```js
+return db
+    .collection("/comments")
+    .where("screamId", "==", request.params.screamId)
+    .orderBy('createdAt', 'desc')
+    .get()
+    .then(comments => {
+        screamData.comments = [];
+        
+        comments.forEach(commentSnapshot =>
+            screamData.comments.push(commentSnapshot.data())
+        );
+
+        return response.status(200).json(screamData);
+    });
+```
+
+The populated `screamData` is returned in the response on a successful request.

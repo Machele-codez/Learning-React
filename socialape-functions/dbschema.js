@@ -8,6 +8,14 @@ let db = {
             commentCount: 2,
         },
     ],
+    comments: [
+        {
+            body: "Comment here, comment there, comments everywhere!",
+            createdAt: "2020-12-10T10:08:08.710Z", // Date ISOString
+            screamId: "6as4g51weg98ew4eqewfsa",
+            userHandle: "Machele-codez",
+        },
+    ],
     users: [
         {
             userId: "79afsd465g98as7gs0",
