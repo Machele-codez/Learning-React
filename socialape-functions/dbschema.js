@@ -44,4 +44,4 @@ const userDetails = {
             screamId: "fasf645g948456684984qwe"
         }
     ]
-}
+};

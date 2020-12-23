@@ -616,4 +616,41 @@ db.doc(`/users/${request.user.handle}`)
     });
 ```
 
-##
+## Getting User Details
+
+This route is going to trigger DB calls that should return the details of the authenticated user that made the request. The route is a GET route and should return user-specific details which would be referred to as 'credentials'. It should also return info pertaining to the screams which the user has 'liked'.
+
+To begin, we initialize an empty Object that would hold the data we get from our Firestore calls.
+
+```js
+let userDetails = {};
+```
+
+Then we make a firestore call to retrieve the document that holds the data of the authenticated user. This will return a 'DocumentSnapshot'. Call `exists()` off the returned snapshot to ensure it exists then proceed. The document snapshot contains all the fields that hold the info about the user. `DocumentSnapshot.data()` function is called off this to retrieve the user credentials and store them in our `userDetails` Object.
+
+```js
+db.doc(`/users/${request.user.handle}`)
+    .get()
+    .then(doc => {
+        if (doc.exists) {
+            userDetails.credentials = doc.data();
+        }
+```
+
+Now, to get the liked posts by our user, we call the `likes` subcollection in the user's document. The returned 'QuerySnapshot' is an Array. Loop through it and store the like subdocuments in `userDetails.likes`.
+
+```js
+db.collection("likes")
+    .where("userHandle", "==", request.user.handle)
+    .get()
+
+    .then(likesSnapshot => {
+        userDetails.likes = [];
+
+        likesSnapshot.forEach(likeDoc =>
+            userDetails.likes.push(likeDoc.data())
+        );
+        return response.json(userDetails).status(200);
+    });
+```
+Remember to handle errors using `.catch()`

@@ -193,12 +193,37 @@ exports.addUserDetails = (request, response) => {
     db.doc(`/users/${request.user.handle}`)
         .update(userDetails)
         .then(() =>
-            response
-                .status(200)
-                .json({
-                    message: `Details for ${request.user.handle} added successfully`,
-                })
+            response.status(200).json({
+                message: `Details for ${request.user.handle} added successfully`,
+            })
         )
+        .catch(error => {
+            console.error(error);
+            return response.status(500).json({ error: error.code });
+        });
+};
+
+// get user details to populate page
+exports.getUserDetails = (request, response) => {
+    let userDetails = {};
+
+    db.doc(`/users/${request.user.handle}`)
+        .get()
+        .then(doc => {
+            if (doc.exists) {
+                userDetails.credentials = doc.data();
+                return db
+                    .collection("likes")
+                    .where("userHandle", "==", request.user.handle)
+                    .get();
+            }
+        })
+        .then(likesSnapshot => {
+            userDetails.likes = [];
+            
+            likesSnapshot.forEach(likeDoc => userDetails.likes.push(likeDoc.data()));
+            return response.json(userDetails).status(200);
+        })
         .catch(error => {
             console.error(error);
             return response.status(500).json({ error: error.code });
