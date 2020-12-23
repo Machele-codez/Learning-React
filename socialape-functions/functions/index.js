@@ -5,7 +5,7 @@ const express = require("express");
 const app = express();
 
 const { getAllScreams, postOneScream } = require("./handlers/screams");
-const { signup, login, uploadImage } = require("./handlers/users");
+const { signup, login, uploadImage, addUserDetails } = require("./handlers/users");
 
 const FirebaseAuthMiddleware = require('./util/firebaseAuthMiddleware');
 
@@ -24,6 +24,8 @@ app.post("/signup", signup);
 app.post("/login", login);
 // TODO image upload route
 app.post("/user/image", FirebaseAuthMiddleware, uploadImage);
+// TODO add user details route
+app.post("/user", FirebaseAuthMiddleware, addUserDetails);
 
 // export all routes defined by the Express app with as /api/<route>
 exports.api = functions.region("europe-west2").https.onRequest(app);

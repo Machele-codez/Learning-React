@@ -543,12 +543,12 @@ Then on a successful upload, we update the user's Firestore instance's imageURL 
 ```js
 .then(() => {
     const imageURL = `https://firebasestorage.googleapis.com/v0/b/${config.storageBucket}/o/${imageFileName}?alt=media`;
-    
+
     return db.doc().collection(`/users/${request.user.handle}`).update({ imageURL });
     // The reason why we can access request.user from here is that this route also uses
     // the firebase authentication middleware we built in which we define request.user
 })
-``` 
+```
 
 And then
 
@@ -567,6 +567,53 @@ Finally to finish the whole process we add:
 ```js
 busboy.end(request.rawBody);
 ```
-Since busboy itself is also a stream, the `busboy.end(request.rawBody)` writes `request.rawBody` as the last thing to the busboy stream and then denies further writing. It is necessary because when I omitted it the request kept on pending. 
+
+Since busboy itself is also a stream, the `busboy.end(request.rawBody)` writes `request.rawBody` as the last thing to the busboy stream and then denies further writing. It is necessary because when I omitted it the request kept on pending.
 
 We have been able to copy the uploaded file into a memory location of our cloud function. Then from that memory location, we upload the file to Google Cloud Storage. Finish!
+
+## Adding extra User Details
+
+This is also going to be a protected POST route. In this route, before sending the raw user details provided from the HTML form to the database, we first make sure we do not send any empty values. So, if a particular field is populated with no value, then it is not added to the request to store these extra details in the database. This kind of filtering functionality is done by a helper function we create ourselves.
+
+```js
+exports.filterUserDetails = rawUserDetails => {
+    // object to hold final result
+    const filteredUserDetails = {};
+
+    if (!isEmpty(rawUserDetails.bio))
+        filteredUserDetails.bio = rawUserDetails.bio.trim();
+
+    if (!isEmpty(rawUserDetails.location))
+        filteredUserDetails.location = rawUserDetails.location.trim();
+
+    if (!isEmpty(rawUserDetails.website)) {
+        // prepend http protocol to user provided links with missing protocols.
+        if (rawUserDetails.website.trim().substring(0, 4) !== "http")
+            filteredUserDetails.website = `http://${rawUserDetails.website.trim()}`;
+        else filteredUserDetails.website = rawUserDetails.website.trim();
+    }
+
+    return filteredUserDetails;
+};
+```
+
+So the website field is not just checked for emptiness, but this filter function makes sure to prepend an HTTP protocol to user-provided links to their websites in the case where they didn't add it themselves.
+
+After filtering, the data is ready for Firestore.
+
+```js
+db.doc(`/users/${request.user.handle}`)
+    .update(userDetails)
+    .then(() =>
+        response.status(200).json({
+            message: `Details for ${request.user.handle} added successfully`,
+        })
+    )
+    .catch(error => {
+        console.error(error);
+        return response.status(500).json({ error: error.code });
+    });
+```
+
+##

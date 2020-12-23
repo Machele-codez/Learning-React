@@ -56,3 +56,24 @@ exports.validateLoginData = user => {
         valid: Object.keys(errors).length === 0 ? true : false,
     };
 };
+
+// remove emtpy values from user details to be sent to DB
+exports.filterUserDetails = rawUserDetails => {
+    // object to hold final result
+    const filteredUserDetails = {};
+
+    if (!isEmpty(rawUserDetails.bio))
+        filteredUserDetails.bio = rawUserDetails.bio.trim();
+
+    if (!isEmpty(rawUserDetails.location))
+        filteredUserDetails.location = rawUserDetails.location.trim();
+
+    if (!isEmpty(rawUserDetails.website)) {
+        // prepend http protocol to user provided links with missing protocols.
+        if (rawUserDetails.website.trim().substring(0, 4) !== "http")
+            filteredUserDetails.website = `http://${rawUserDetails.website.trim()}`;
+        else filteredUserDetails.website = rawUserDetails.website.trim();
+    }
+
+    return filteredUserDetails;
+};
