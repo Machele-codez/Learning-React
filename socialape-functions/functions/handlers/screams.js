@@ -65,7 +65,7 @@ exports.getScream = (request, response) => {
             return db
                 .collection("/comments")
                 .where("screamId", "==", request.params.screamId)
-                .orderBy('createdAt', 'desc')
+                .orderBy("createdAt", "desc")
                 .get()
                 .then(comments => {
                     screamData.comments = [];
@@ -79,5 +79,35 @@ exports.getScream = (request, response) => {
                     console.error(error);
                     return response.status(500).json({ error: error.code });
                 });
+        });
+};
+
+// comment on a scream
+exports.commentOnScream = (request, response) => {
+    // validate for non-empty comment body
+    if (!request.body.body.trim())
+        return response.status(400).json({ error: "Must not be empty" });
+
+    // comment Object
+    const newComment = {
+        body: request.body.body.trim(),
+        createdAt: new Date().toISOString(),
+        screamId: request.params.screamId,
+        userHandle: request.user.handle,
+        userImageURL: request.user.imageURL,
+    };
+
+    db.doc(`/screams/${request.params.screamId}`)
+        .get()
+        .then(doc => {
+            if (!doc.exists)
+                return response.status(404).json({ error: "Scream not found" });
+
+            return db.collection("comments").add(newComment);
+        })
+        .then(() => response.json(newComment))
+        .catch(error => {
+            console.error(error);
+            response.status(500).json({ error: "Something went wrong" });
         });
 };

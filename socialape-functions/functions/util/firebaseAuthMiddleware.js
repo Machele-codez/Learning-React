@@ -20,7 +20,7 @@ module.exports = (request, response, next) => {
             // add token to request object
             request.user = decodedToken;
 
-            // getting user handle from DB - user handle is stored in a Firestore collection, not part of the decoded token
+            // return extra user details found in user's Firestore document
             return db
                 .collection("/users")
                 .where("userId", "==", request.user.uid)
@@ -30,10 +30,14 @@ module.exports = (request, response, next) => {
         .then(data => {
             // adding handle property to request.user
             request.user.handle = data.docs[0].data().handle;
+            // adding imageURL property to request.user
+            request.user.imageURL = data.docs[0].data().imageURL;
+            
             return next();
         })
         .catch(error => {
             console.error("Error while verifying token ", error);
             return response.status(403).json(error);
         });
+
 };

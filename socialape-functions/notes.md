@@ -188,7 +188,6 @@ app.get("/screams", (request, response) => {
 exports.api = functions.https.onRequest(app);
 ```
 
-
 ```js
 admin.firestore().collection("collection_name").orderBy("fieldName", "desc");
 ```
@@ -691,11 +690,11 @@ Now, to get the comments on the scream, we make a separate call to the 'comments
 return db
     .collection("/comments")
     .where("screamId", "==", request.params.screamId)
-    .orderBy('createdAt', 'desc')
+    .orderBy("createdAt", "desc")
     .get()
     .then(comments => {
         screamData.comments = [];
-        
+
         comments.forEach(commentSnapshot =>
             screamData.comments.push(commentSnapshot.data())
         );
@@ -705,3 +704,63 @@ return db
 ```
 
 The populated `screamData` is returned in the response on a successful request.
+
+## Post a Comment
+
+This is also a protected route and so we add the firebaseAuthenticationMiddleware here too. Now, when posting a comment we'd like to add the profile image URL of the user who made that comment so that we can show the profile image in the UI with the user's comment. So we need a way to access the commment. As at the moment, the only way would be to make a separate DB call to get the current user's imageURL field value. But that would count against are quota for each comment being made on a scream even if it is by the same user. That's very inefficient.
+
+To solve our problem alternatively, let's modify the firebaseAuthenticationMiddleware to include the user's imageURL in `request.user`. This means that once the user is authenticated, we have access to the imageURL field within all protected routes.
+
+```js
+// ? /util/firebaseAuthenticationMiddleware.js
+
+// return extra user details found in user's Firestore document
+return db
+    .collection("/users")
+    .where("userId", "==", request.user.uid)
+    .limit(1)
+    .get()
+    .then(data => {
+        // adding handle property to request.user
+        request.user.handle = data.docs[0].data().handle;
+        // adding imageURL property to request.user
+        request.user.imageURL = data.docs[0].data().imageURL;
+
+        return next();
+    });
+```
+
+So within our `commentOnScream` handler, responsible for creating comments, we create a new comment Object after validating the body from user input.
+
+```js
+// validate for non-empty comment body
+if (!request.body.body.trim())
+    return response.status(400).json({ error: "Must not be empty" });
+
+// comment Object
+const newComment = {
+    body: request.body.body.trim(),
+    createdAt: new Date().toISOString(),
+    screamId: request.params.screamId,
+    userHandle: request.user.handle,
+    userImageURL: request.user.imageURL,
+};
+```
+
+Then after making sure that our scream exists, we add the new comment (i.e the `newComment` Object) to the comments subcollection within the scream document.
+
+```js
+db.doc(`/screams/${request.params.screamId}`)
+    .get()
+    .then(doc => {
+        if (!doc.exists)
+            return response.status(404).json({ error: "Scream not found" });
+
+        return db.collection("comments").add(newComment);
+    })
+    .then(() => response.json(newComment))
+    .catch(error => {
+        console.error(error);
+        response.status(500).json({ error: "Something went wrong" });
+    });
+```
