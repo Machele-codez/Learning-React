@@ -2,7 +2,8 @@ let db = {
     screams: [
         {
             userHandle: "Machele-codez",
-            body: "Some text that would be displayed as the body of our scream.",
+            body:
+                "Some text that would be displayed as the body of our scream.",
             createdAt: "2020-12-10T10:08:08.710Z", // Date ISOString
             likeCount: 5,
             commentCount: 2,
@@ -28,6 +29,12 @@ let db = {
             location: "Accranada, GH",
         },
     ],
+    likes: [
+        {
+            userHandle: "goodman",
+            screamId: "fasf645g948456684984qwe",
+        },
+    ],
 };
 
 const userDetails = {
@@ -45,11 +52,11 @@ const userDetails = {
     likes: [
         {
             user: "goodman",
-            screamId: "fasf645g948456684984qwe"
+            screamId: "fasf645g948456684984qwe",
         },
         {
             user: "goodman",
-            screamId: "fasf645g948456684984qwe"
-        }
-    ]
+            screamId: "fasf645g948456684984qwe",
+        },
+    ],
 };

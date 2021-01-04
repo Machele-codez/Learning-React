@@ -645,8 +645,8 @@ db.collection("likes")
     .then(likesSnapshot => {
         userDetails.likes = [];
 
-        likesSnapshot.forEach(likeDoc =>
-            userDetails.likes.push(likeDoc.data())
+        likesSnapshot.forEach(likeDocArray =>
+            userDetails.likes.push(likeDocArray.data())
         );
         return response.json(userDetails).status(200);
     });
@@ -764,3 +764,119 @@ db.doc(`/screams/${request.params.screamId}`)
         response.status(500).json({ error: "Something went wrong" });
     });
 ```
+
+## Likes and Unlikes
+
+It seems more sensible to store each scream's likes and comments within the same scream's document. But when dealing with databases it is good practice to keep each record small. Also, Firebase has a limit of 4MB per document so there is a need to separate what can safely be, especially in this case where a single scream can have thousands of likes and comments. Plus, it helps in making queries more efficient.
+
+The likes are therefore going to be stored in a separate collection. Each like document would have two fields for now, the `userHandle` and the `screamId`. This is how the like document structure would be.
+
+```json
+likes: [
+        {
+            userHandle: "userone_handle",
+            screamId: "scream2439114nlfjo23u0jf",
+        },
+        {
+            userHandle: "usertwo_handle",
+            screamId: "screamr208f9j2390j20cmwi",
+        }
+    ],
+```
+
+The `userHandle` is already part of an authenticated user's request. The `screamId` is a URL parameter.
+
+So when the `likeScream` handler route is hit; we first make sure that the scream id passed as a URL parameter actually belongs to an existing scream in the DB. Then, we store the scream document to a variable defined earlier (`screamData`). Then make a request to get the like document too.
+
+```js
+let screamData;
+
+// like document from db with details matching that in request
+const likeDocument = db
+    .collection("likes")
+    .where("userHandle", "==", request.user.handle)
+    .where("screamId", "==", request.params.screamId)
+    .limit(1);
+
+// scream document from db with details matching that in request
+const screamDocument = db.doc(`/screams/${request.params.screamId}`);
+
+screamDocument.get().then(screamDoc => {
+    // if scream exists
+    if (screamDoc.exists) {
+        // extract data to variable
+        screamData = screamDoc.data();
+        screamData.screamId = screamDoc.id;
+
+        // make a request to get like document
+        return likeDocument.get();
+    } else return response.status(404).json({ error: "Scream not found" });
+});
+```
+
+The request to get the like document also resolves to a promise. So we handle it in a `.then()`. If the like document exists then we return an error stating that we cannot like the same scream again. If it doesn't exist then we create the like document.
+
+```js
+.then(likeDocArray => {
+    if (likeDocArray.empty) {
+        db.collection("likes")
+            .add({
+                userHandle: request.user.handle,
+                screamId: request.params.screamId,
+            })
+    }
+})
+```
+
+After creating the like document in the database, we need to update the like count of the scream. So we attach that after the `db.collection('likes').add()` resolves. And then we finally return the `screamData` which holds all info about the liked scream.
+
+```js
+if (likeDocArray.empty) {
+    // create document for the `like` in DB
+    db.collection("likes")
+        .add({
+            userHandle: request.user.handle,
+            screamId: request.params.screamId,
+        })
+        // update like-count of scream
+        .then(() => {
+            screamData.likeCount++;
+            return screamDocument.update({
+                likeCount: screamData.likeCount,
+            });
+        })
+        // return JSON response
+        .then(() => {
+            return response.json(screamData);
+        });
+} else {
+    return response.status(400).json({ error: "Scream already liked" });
+}
+```
+
+Conversely, to unlike a scream would be very similar. The difference would be that we have to make a request to the like collection expecting that the queried like exists. Then, we delete it.
+
+```js
+.then(likeDocArray => {
+    if (likeDocArray.empty)
+        return response.status(400).json({ error: "Scream not liked" });
+    else {
+        // delete like document from DB
+        return (
+            db
+                .doc(`/likes/${likeDocArray.docs[0].id}`)
+                .delete()
+                // decrease like-count of scream
+                .then(() => {
+                    screamData.likeCount--;
+                    return screamDocument.update({
+                        likeCount: screamData.likeCount,
+                    });
+                })
+                .then(() => response.json(screamData))
+        );
+    }
+    })
+```
+
+## Deleting a Scream

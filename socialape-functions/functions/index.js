@@ -4,7 +4,7 @@ const functions = require("firebase-functions");
 const express = require("express");
 const app = express();
 
-const { getAllScreams, postOneScream, getScream, commentOnScream } = require("./handlers/screams");
+const { getAllScreams, postOneScream, getScream, commentOnScream, likeScream, unlikeScream, deleteScream } = require("./handlers/screams");
 const { signup, login, uploadImage, addUserDetails, getUserDetails } = require("./handlers/users");
 
 const firebaseAuthMiddleware = require("./util/firebaseAuthMiddleware");
@@ -19,6 +19,12 @@ app.get("/scream/:screamId", getScream);
 app.post("/scream", firebaseAuthMiddleware, postOneScream);
 // ? comment on scream
 app.post("/scream/:screamId/comment", firebaseAuthMiddleware, commentOnScream);
+// ? like a scream
+app.get("/scream/:screamId/like", firebaseAuthMiddleware, likeScream);
+// ? unlike a scream
+app.get("/scream/:screamId/unlike", firebaseAuthMiddleware, unlikeScream);
+// ? unlike a scream
+app.delete("/scream/:screamId", firebaseAuthMiddleware, deleteScream);
 
 
 // * User Routes
