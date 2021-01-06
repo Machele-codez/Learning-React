@@ -880,3 +880,54 @@ Conversely, to unlike a scream would be very similar. The difference would be th
 ```
 
 ## Deleting a Scream
+
+We do this by getting the scream document and deleting it using the `delete` method of its `DocumentReference`.
+
+```js
+const screamDocument = db
+    .doc(`/screams/${request.params.screamId}`)
+    .get()
+    .then(doc => doc.ref.delete());
+```
+
+But make sure to ensure that the scream can onlybe deleted by the user who uploaded it by cross-checking its `userHandle` value with `requets.user.handle`. Also, make sure that you handle a case where the request is to delete a scream that does not exist.
+
+## Notifications
+
+We are going to use firestore triggers, which are event listeners that watch for certain actions, to create our notifications. The firestore trigger is created as a separate cloud function. 
+
+### Notification on Like
+Here we use the `onCreate` trigger to fire that fires whenever a new like document is created.
+
+```js
+exports.createNotificationOnLike = functions
+    .region("europe-west2")
+    .firestore.document("likes/{id}")
+    .onCreate(likeSnapshot => {
+        // do something
+    });
+```
+
+Within the trigger, the a snapshot scream which was liked is retrieved. Then, we create the notification document using the like document id as the id for the notification document. Also, some data from the scream is used to populate the notification document.
+
+```js
+db.doc(`/screams/${likeSnapshot.data().screamId}`)
+    .get()
+    .then(screamSnapshot => {
+        if (screamSnapshot.exists) {
+            // create a notification document with id being same as the like id
+            return db.screamSnapshot(`/notifications/${likeSnapshot.id}`).set({
+                recipient: screamSnapshot.data().userHandle, // handle of user who uploaded scream
+                sender: likeSnapshot.data().userHandle, // handle of user who liked scream
+                read: false,
+                screamId: screamSnapshot.id,
+                type: "like",
+                createdAt: new Date().toISOString(),
+            });
+        }
+    });
+```
+`screamSnapshot` is a DB snapshot of the scream document which was liked. `likeSnapshot` is a DB snapshot of the like document itself.
+
+### Notification on Comment
+The trigger for creating notifications for comments is very similar to that for creating notifications for likes. The difference is that instead of dealing with a snapshot from the `likes` collection, we'll be using the `comments` collection instead.

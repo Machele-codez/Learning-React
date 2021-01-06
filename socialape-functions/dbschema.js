@@ -35,6 +35,16 @@ let db = {
             screamId: "fasf645g948456684984qwe",
         },
     ],
+    notifications: [
+        {
+            sender: "newuser",
+            recipient: "james_urla",
+            read: "true | false",
+            screamId: "fasf645g948456684984qwe",
+            type: "like | comment",
+            createdAt: "2020-12-10T10:08:08.710Z"
+        }
+    ]
 };
 
 const userDetails = {
