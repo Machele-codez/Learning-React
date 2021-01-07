@@ -614,7 +614,7 @@ db.doc(`/users/${request.user.handle}`)
     });
 ```
 
-## Getting User Details
+## Getting Authenticated User Details
 
 This route is going to trigger DB calls that should return the details of the authenticated user that made the request. The route is a GET route and should return user-specific details which would be referred to as 'credentials'. It should also return info pertaining to the screams which the user has 'liked'.
 
@@ -894,9 +894,10 @@ But make sure to ensure that the scream can onlybe deleted by the user who uploa
 
 ## Notifications
 
-We are going to use firestore triggers, which are event listeners that watch for certain actions, to create our notifications. The firestore trigger is created as a separate cloud function. 
+We are going to use firestore triggers, which are event listeners that watch for certain actions, to create our notifications. The firestore trigger is created as a separate cloud function.
 
 ### Notification on Like
+
 Here we use the `onCreate` trigger to fire that fires whenever a new like document is created.
 
 ```js
@@ -927,7 +928,65 @@ db.doc(`/screams/${likeSnapshot.data().screamId}`)
         }
     });
 ```
+
 `screamSnapshot` is a DB snapshot of the scream document which was liked. `likeSnapshot` is a DB snapshot of the like document itself.
 
-### Notification on Comment
+### Notification upon a Comment
+
 The trigger for creating notifications for comments is very similar to that for creating notifications for likes. The difference is that instead of dealing with a snapshot from the `likes` collection, we'll be using the `comments` collection instead.
+
+### Deleting Notification When a Scream is Unliked
+
+When a scream is unliked we want to delete the notification saying that the scream has been liked so that the user wouldn't click it and realize that it is "not liked anymore". So we place an `onDelete` trigger for the like document. Now, when a like is deleted, the corresponding notification, which has the same ID as the like, is also deleted.
+
+```js
+exports.deleteNotificationOnUnlike = functions
+    .region("europe-west2")
+    .firestore.document("likes/{id}")
+    .onDelete(likeSnapshot => {
+        // delete notification
+        db.doc(`notifications/${likeSnapshot.id}`)
+            .delete()
+            .then(() => {
+                return;
+            })
+            .catch(error => {
+                console.log(error);
+                return;
+            });
+    });
+```
+
+Remember to add the notifications for a particular user to the `getAuthUser` handler.
+
+## Getting User Details
+
+This route will enable us to get the details of any user by the user handle specified as a URL parameter. The response should contain details of the user and the user's screams. So a request is made to retrieve user details from the `/users/{userHandle}` document in firestore. Then, the user's screams are gotten by performing a query on the `screams` collection to filter and return only screams which have their `userHandle` field value matching the handle passed as a URL parameter.
+
+## Marking Notifications as Read
+
+The frontend is going to be such that the notifications can be viewed via a dropdown menu. What we want is to send an array of the notification IDs that the user sees when the notifications are viewed. For this we'll need batch writing.
+
+```js
+let batch = db.batch();
+```
+
+This creates a new batch with which we can perform multiple write operations on multiple documents and then commit the batch to run the write operations atomically.
+
+```js
+// create a new batch
+let batch = db.batch();
+
+// get each notification id from the request
+request.body.forEach(notificationId => {
+    // use the notification id to get the corresponding document from Firestore
+    const notificationDoc = db.doc(`/notifications/${notificationId}`);
+    // perform update
+    batch.update(notificationDoc, { read: true });
+});
+
+// commit batch operation
+batch
+    .commit()
+    .then(() => response.json({ message: "Notifications marked read" }));
+```

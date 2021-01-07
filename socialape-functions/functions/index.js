@@ -19,7 +19,9 @@ const {
     login,
     uploadImage,
     addUserDetails,
+    getAuthUser,
     getUserDetails,
+    markNotificationsRead,
 } = require("./handlers/users");
 
 const firebaseAuthMiddleware = require("./util/firebaseAuthMiddleware");
@@ -51,8 +53,12 @@ app.post("/login", login);
 app.post("/user/image", firebaseAuthMiddleware, uploadImage);
 // ? add extra user details route
 app.post("/user", firebaseAuthMiddleware, addUserDetails);
-// ? get user details route
-app.get("/user", firebaseAuthMiddleware, getUserDetails);
+// ? get authenticated user's details route
+app.get("/user", firebaseAuthMiddleware, getAuthUser);
+// ? get any user's details route
+app.get("/user/:handle", getUserDetails);
+// ? mark notifications as read
+app.put("/notifications", firebaseAuthMiddleware, markNotificationsRead);
 
 // export all routes defined by the Express app as /api/<route>
 exports.api = functions.region("europe-west2").https.onRequest(app);
@@ -109,6 +115,7 @@ exports.createNotificationOnComment = functions
     .region("europe-west2")
     .firestore.document("comments/{id}")
     .onCreate(commentSnapshot => {
+        console.log("Comment Trigger");
         // get the scream document
         db.doc(`/screams/${commentSnapshot.data().screamId}`)
             .get()
@@ -120,10 +127,11 @@ exports.createNotificationOnComment = functions
                         sender: commentSnapshot.data().userHandle, // handle of user who liked scream
                         read: false,
                         screamId: screamSnapshot.id,
-                        type: "like",
+                        type: "comment",
                         createdAt: new Date().toISOString(),
                     });
                 }
+                console.error("Scream not found")
             })
             .then(() => {
                 return;

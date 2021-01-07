@@ -12,6 +12,7 @@ const {
 } = require("../util/validators");
 
 const config = require("../util/config");
+const { user } = require("firebase-functions/lib/providers/auth");
 
 // signup a new user
 exports.signup = (request, response) => {
@@ -203,8 +204,8 @@ exports.addUserDetails = (request, response) => {
         });
 };
 
-// get user details to populate page
-exports.getUserDetails = (request, response) => {
+// get authenticated user's details
+exports.getAuthUser = (request, response) => {
     let userDetails = {};
 
     db.doc(`/users/${request.user.handle}`)
@@ -220,10 +221,89 @@ exports.getUserDetails = (request, response) => {
         })
         .then(likesSnapshot => {
             userDetails.likes = [];
-            
-            likesSnapshot.forEach(likeDoc => userDetails.likes.push(likeDoc.data()));
-            return response.json(userDetails).status(200);
+
+            likesSnapshot.forEach(likeDoc =>
+                userDetails.likes.push(likeDoc.data())
+            );
+            return db
+                .collection("notifications")
+                .where("recipient", "==", request.user.handle)
+                .orderBy("createdAt", "desc")
+                .limit(10)
+                .get();
         })
+        .then(notificationsSnapshot => {
+            userDetails.notifications = [];
+            notificationsSnapshot.forEach(notificationDoc => {
+                userDetails.notifications.push({
+                    notificationId: notificationDoc.id,
+                    ...notificationDoc.data(),
+                });
+            });
+            return response.json(userDetails);
+        })
+        .catch(error => {
+            console.error(error);
+            return response.status(500).json({ error: error.code });
+        });
+};
+
+// get any user's details
+exports.getUserDetails = (request, response) => {
+    let userDetails = {};
+
+    // get user data from DB and store to variable
+    db.doc(`/users/${request.params.handle}`)
+        .get()
+        .then(userDoc => {
+            if (userDoc.exists) {
+                userDetails.user = userDoc.data();
+
+                // get user's screams
+                return db
+                    .collection("screams")
+                    .where("userHandle", "==", request.params.handle)
+                    .orderBy("createdAt", "desc")
+                    .get();
+            }
+
+            return response.status(404).json({ error: "User not found" });
+        })
+        .then(screamsSnapshot => {
+            userDetails.screams = [];
+
+            screamsSnapshot.docs.forEach(screamDoc => {
+                userDetails.screams.push({
+                    screamId: screamDoc.id,
+                    ...screamDoc.data(),
+                });
+            });
+
+            return response.json(userDetails);
+        })
+        .catch(error => {
+            console.error(error);
+            return response.status(500).json({ error: error.code });
+        });
+};
+
+// mark notifications as read
+exports.markNotificationsRead = (request, response) => {
+    // create a new batch
+    let batch = db.batch();
+
+    // get each notification id from the request
+    request.body.forEach(notificationId => {
+        // use the notification id to get the corresponding document from Firestore
+        const notificationDoc = db.doc(`/notifications/${notificationId}`);
+        // perform update
+        batch.update(notificationDoc, { read: true });
+    });
+
+    // commit batch operation
+    batch
+        .commit()
+        .then(() => response.json({ message: "Notifications marked read" }))
         .catch(error => {
             console.error(error);
             return response.status(500).json({ error: error.code });
