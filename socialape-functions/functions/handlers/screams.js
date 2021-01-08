@@ -61,27 +61,28 @@ exports.getScream = (request, response) => {
                 return response
                     .status(404)
                     .json({ message: "Scream not found" });
+            else {
+                screamData = doc.data();
+                screamData.screamId = doc.id;
 
-            screamData = doc.data();
-            screamData.screamId = doc.id;
+                return db
+                    .collection("comments")
+                    .where("screamId", "==", request.params.screamId)
+                    .orderBy("createdAt", "desc")
+                    .get()
+                    .then(comments => {
+                        screamData.comments = [];
+                        comments.forEach(commentSnapshot =>
+                            screamData.comments.push(commentSnapshot.data())
+                        );
 
-            return db
-                .collection("/comments")
-                .where("screamId", "==", request.params.screamId)
-                .orderBy("createdAt", "desc")
-                .get()
-                .then(comments => {
-                    screamData.comments = [];
-                    comments.forEach(commentSnapshot =>
-                        screamData.comments.push(commentSnapshot.data())
-                    );
-
-                    return response.status(200).json(screamData);
-                })
-                .catch(error => {
-                    console.error(error);
-                    return response.status(500).json({ error: error.code });
-                });
+                        return response.status(200).json(screamData);
+                    })
+                    .catch(error => {
+                        console.error(error);
+                        return response.status(500).json({ error: error.code });
+                    });
+            }
         });
 };
 
@@ -89,7 +90,7 @@ exports.getScream = (request, response) => {
 exports.commentOnScream = (request, response) => {
     // validate for non-empty comment body
     if (!request.body.body.trim())
-        return response.status(400).json({ error: "Must not be empty" });
+        return response.status(400).json({ comment: "Must not be empty" });
 
     // comment Object
     const newComment = {
@@ -105,17 +106,18 @@ exports.commentOnScream = (request, response) => {
         .then(doc => {
             if (!doc.exists)
                 return response.status(404).json({ error: "Scream not found" });
-
-            return doc.ref.update({
-                commentCount: doc.data().commentCount + 1,
-            });
+            else {
+                return doc.ref.update({
+                    commentCount: doc.data().commentCount + 1,
+                })
+				.then(() => db.collection("comments").add(newComment))
+				.then(() => response.json(newComment))
+				.catch(error => {
+					console.error(error);
+					response.status(500).json({ error: "Something went wrong" });
+				});
+			}
         })
-        .then(() => db.collection("comments").add(newComment))
-        .then(() => response.json(newComment))
-        .catch(error => {
-            console.error(error);
-            response.status(500).json({ error: "Something went wrong" });
-        });
 };
 
 // add a like to a scream
@@ -235,7 +237,7 @@ exports.deleteScream = (request, response) => {
             else if (doc.data().userHandle !== request.user.handle)
                 return response.status(403).json({ error: "Unauthorized" });
             // delete scream document from DB
-            return doc.ref.delete();
+            else return doc.ref.delete();
         })
         .then(() => response.json({ message: "Scream deleted successfully" }))
         .catch(error => {

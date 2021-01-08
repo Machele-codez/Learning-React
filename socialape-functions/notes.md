@@ -909,13 +909,16 @@ exports.createNotificationOnLike = functions
     });
 ```
 
-Within the trigger, the a snapshot scream which was liked is retrieved. Then, we create the notification document using the like document id as the id for the notification document. Also, some data from the scream is used to populate the notification document.
+Within the trigger, a snapshot of the scream document which was liked is retrieved. Then, we create the notification document using the like document id as the id for the notification document. Also, some data from the scream is used to populate the notification document. But first we make sure that the screm actually exists and that the notification is not created if the scream is liked by the same user who posted it.
 
 ```js
 db.doc(`/screams/${likeSnapshot.data().screamId}`)
     .get()
     .then(screamSnapshot => {
-        if (screamSnapshot.exists) {
+        if (
+            screamSnapshot.exists &&
+            likeSnapshot.data().userHandle !== screamSnapshot.data().userHandle
+        ) {
             // create a notification document with id being same as the like id
             return db.screamSnapshot(`/notifications/${likeSnapshot.id}`).set({
                 recipient: screamSnapshot.data().userHandle, // handle of user who uploaded scream
@@ -990,3 +993,104 @@ batch
     .commit()
     .then(() => response.json({ message: "Notifications marked read" }));
 ```
+
+## User Profile Picture Update Trigger
+
+When the profile picture of a user is updated, we want to subsequently update the `userImage` fields of screams (and comments) that where created by that user. So we create an `onUpdate` trigger on the `users/{handle}` documents. But before we do anything, we make sure that the `imageURL` field of the user document was updated.
+
+```js
+exports.onUserImageChange = functions
+    .region("europe-west2")
+    .firestore.document("users/{handle}")
+    .onUpdate(userDoc => {
+        // check if the `imageURL` field changed
+        if (userDoc.before.data().imageURL !== userDoc.after.data().imageURL) {
+            // create batch for multiple screams that are to be updated
+            let batch = db.batch();
+            // retrieve all screams created by the user
+            return db
+                .collection("screams")
+                .where("userHandle", "==", userDoc.before.data().handle)
+                .get()
+                .then(screamDocs => {
+                    // loop through the scream documents
+                    screamDocs.forEach(screamDoc => {
+                        // using the document references, update the userImage field of the scream
+                        batch.update(screamDoc.ref, {
+                            userImage: userDoc.after.data().imageURL,
+                        });
+                        return batch.commit();
+                    });
+                });
+        }
+    });
+```
+
+**NB**: When performing the batch update operation while looping through the scream documents of the user, the first argument of `batch.update()` was the document reference and not the document itself. AND DON'T FORGET TO COMMIT THE BATCH.
+
+<pre style="font-family: Consolas, 'Courier New', monospace">
+batch.update(<span style='background-color:green'>screamDoc.ref</span>, {
+    userImage: userDoc.after.data().imageURL,
+});
+</pre>
+
+## Delete Screm Trigger
+
+When a scream document is deleted from Firestore we'd want to delete its corresponding notifications, comments and likes as well. So first of all we create a batch since we are going to do some multiple batch delete operations. Then we need the scream id to be able to query Firestore for related documents from other collections (notifications, comments, and likes). The scream id can be gotten from the `context` parameter of the `onDelete` trigger.
+
+```js
+exports.onScreamDelete = functions
+    .region("europe-west2")
+    .firestore.document("screams/{screamId}")
+    .onDelete((snapshot, context) => {
+        // create batch
+        const batch = db.batch();
+        const screamId = context.params.screamId;
+
+        // some more code ...
+    }
+```
+
+Next, we'll be querying three different collections to get documents from them related to the scream. Since the return values of these queries are of the same type, we'll make the requests to the different collections concurrently using `Promise.all`. Therefore, we create an array to hold the three queries. Then we push the three queries into the array.
+
+```js
+// array to hold queries to retrieve documents related to scream from different collections
+let screamRelQueries = [];
+// comment documents related to scream
+screamRelQueries.push(
+    db.collection("comments").where("screamId", "==", screamId).get()
+);
+// like documents related to scream
+screamRelQueries.push(
+    db.collection("likes").where("screamId", "==", screamId).get()
+);
+// notification documents related to scream
+screamRelQueries.push(
+    db.collection("notifications").where("screamId", "==", screamId).get()
+);
+```
+
+Now, using `Promise.all` we make the requests for the queries asynchronously to Firestore. Each query returns a QuerySnapshot. The QuerySnapshots have a `.docs` property that holds an array of Documents matching the query. Therefore, our `Promise.all` returns an array of three QuerySnapshots. But we need the documents themselves found within each of these QuerySnapshots. So what do we do? Bingo! We can get a single array of all the documents in the three QuerySnapshots using the `Array.prototype.reduce` function.
+
+```js
+// perform db queries concurrently
+return Promise.all(screamRelQueries).then(querySnapshots => {
+    // return array of all related documents
+    let docs = querySnapshots
+        .map(querySnapshot => querySnapshot.docs)
+        .reduce((accumulator, queryDocs) => [...accumulator, ...queryDocs]);
+
+    docs.forEach(doc => {
+        batch.delete(doc.ref);
+    });
+
+    return batch.commit();
+});
+```
+
+We use `.map` to obtain an array consisting of three arrays of documents. For this new array of arrays of documents, we call the reduce function. The reduce function's callback takes two parameters, `accumulator` and `currentValue` (referred to here as `queryDocs`). What does the reduce do? Think of it as a loop.
+
+The reduce function loops through each element of the array (i.e. each array of documents in the array (the array modified by `.map`)). `accumulator` is a persisted value that holds the return value upon each iteration. The `querySnapshot` variable represents each array of documents. So in the first iteration, `accumulator` is going to hold an array of the first QuerySnapshot's documents whereas `queryDocs` holds the second QuerySnapshot's documents. Then, the arrays holding the documents of both QuerySnapshots are spread in a single array. Therefore, the first iteration returns a single array consisting of the documents in the first and second QuerySnapshots. In the second iteration, `accumulator` now has the value of the returned single array from the first iteration. `queryDocs` assumes the value of the third QuerySnapshot's documents. The `accumulator`'s elements together with the documents of the third QuerySnapshot is spread resulting in one final array holding the documents of all the three queries.
+
+Now, the documents are looped through and are deleted in one batch.
+

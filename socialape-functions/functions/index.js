@@ -69,10 +69,15 @@ exports.createNotificationOnLike = functions
     .firestore.document("likes/{id}")
     .onCreate(likeSnapshot => {
         // get the scream document
-        db.doc(`/screams/${likeSnapshot.data().screamId}`)
+        return db
+            .doc(`/screams/${likeSnapshot.data().screamId}`)
             .get()
             .then(screamSnapshot => {
-                if (screamSnapshot.exists) {
+                if (
+                    screamSnapshot.exists &&
+                    likeSnapshot.data().userHandle !==
+                        screamSnapshot.data().userHandle
+                ) {
                     // create a notification document with id being same as the like id
                     return db.doc(`/notifications/${likeSnapshot.id}`).set({
                         recipient: screamSnapshot.data().userHandle, // handle of user who uploaded scream
@@ -84,13 +89,7 @@ exports.createNotificationOnLike = functions
                     });
                 }
             })
-            .then(() => {
-                return;
-            })
-            .catch(error => {
-                console.error(error);
-                return;
-            });
+            .catch(error => console.error(error));
     });
 
 // Firestore unlike trigger
@@ -99,15 +98,10 @@ exports.deleteNotificationOnUnlike = functions
     .firestore.document("likes/{id}")
     .onDelete(likeSnapshot => {
         // delete notification
-        db.doc(`notifications/${likeSnapshot.id}`)
+        return db
+            .doc(`notifications/${likeSnapshot.id}`)
             .delete()
-            .then(() => {
-                return;
-            })
-            .catch(error => {
-                console.log(error);
-                return;
-            });
+            .catch(error => console.error(error));
     });
 
 // Firestore comment trigger
@@ -117,10 +111,15 @@ exports.createNotificationOnComment = functions
     .onCreate(commentSnapshot => {
         console.log("Comment Trigger");
         // get the scream document
-        db.doc(`/screams/${commentSnapshot.data().screamId}`)
+        return db
+            .doc(`/screams/${commentSnapshot.data().screamId}`)
             .get()
             .then(screamSnapshot => {
-                if (screamSnapshot.exists) {
+                if (
+                    screamSnapshot.exists &&
+                    likeSnapshot.data().userHandle !==
+                        screamSnapshot.data().userHandle
+                ) {
                     // create a notification document with id being same as the like id
                     return db.doc(`/notifications/${commentSnapshot.id}`).set({
                         recipient: screamSnapshot.data().userHandle, // handle of user who uploaded scream
@@ -131,13 +130,84 @@ exports.createNotificationOnComment = functions
                         createdAt: new Date().toISOString(),
                     });
                 }
-                console.error("Scream not found")
+                console.error("Scream not found");
             })
-            .then(() => {
-                return;
+            .catch(error => console.error(error));
+    });
+
+// user profile picture update trigger
+exports.onUserImageChange = functions
+    .region("europe-west2")
+    .firestore.document("users/{handle}")
+    .onUpdate(userDoc => {
+        console.log(userDoc.before.data());
+        console.log(userDoc.after.data());
+        // check if the `imageURL` field changed
+        if (userDoc.before.data().imageURL !== userDoc.after.data().imageURL) {
+            // create batch for multiple screams that are to be updated
+            const batch = db.batch();
+            // retrieve all screams created by the user
+            return db
+                .collection("screams")
+                .where("userHandle", "==", userDoc.before.data().handle)
+                .get()
+                .then(screamDocs => {
+                    // loop through the scream documents
+                    screamDocs.forEach(screamDoc => {
+                        // using the document references, update the userImage field of the scream
+                        batch.update(screamDoc.ref, {
+                            userImage: userDoc.after.data().imageURL,
+                        });
+                        return batch.commit();
+                    });
+                })
+                .catch(error => console.error);
+        } else return true;
+    });
+
+// scream delete trigger
+exports.onScreamDelete = functions
+    .region("europe-west2")
+    .firestore.document("screams/{screamId}")
+    .onDelete((snapshot, context) => {
+        // create batch
+        const batch = db.batch();
+        const screamId = context.params.screamId;
+
+        // array to hold queries to retrieve documents related to scream from different collections
+        let screamRelQueries = [];
+        // comment documents related to scream
+        screamRelQueries.push(
+            db.collection("comments").where("screamId", "==", screamId).get()
+        );
+        // like documents related to scream
+        screamRelQueries.push(
+            db.collection("likes").where("screamId", "==", screamId).get()
+        );
+        // notification documents related to scream
+        screamRelQueries.push(
+            db
+                .collection("notifications")
+                .where("screamId", "==", screamId)
+                .get()
+        );
+
+        // perform db queries concurrently
+        return Promise.all(screamRelQueries)
+            .then(querySnapshots => {
+                // return array of all related documents
+                let docs = querySnapshots
+                    // .map to return an array of arrays of documents
+                    .map(querySnapshot => querySnapshot.docs)
+                    // reduce the array of arrays to a single array of all documents
+                    .reduce((accumulator, queryDocs) => [...accumulator, ...queryDocs]);
+
+                // loop through documents and perform delete
+                docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+
+                return batch.commit();
             })
-            .catch(error => {
-                console.error(error);
-                return;
-            });
+            .catch(error => console.error(error));
     });

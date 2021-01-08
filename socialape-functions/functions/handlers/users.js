@@ -11,7 +11,6 @@ const {
     filterUserDetails,
 } = require("../util/validators");
 
-const config = require("../util/config");
 const { user } = require("firebase-functions/lib/providers/auth");
 
 // signup a new user
@@ -66,7 +65,7 @@ exports.signup = (request, response) => {
                 email: newUser.email,
                 createdAt: new Date().toISOString(),
                 userId,
-                imageURL: `https://firebasestorage.googleapis.com/v0/b/${config.storageBucket}/o/${blankProfileImage}?alt=media`,
+                imageURL: `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${blankProfileImage}?alt=media`,
             };
             return db.doc(`/users/${userData.handle}`).set(userData);
         })
@@ -80,7 +79,9 @@ exports.signup = (request, response) => {
                     .status(400)
                     .json({ email: "email already in use" });
             // other errors
-            return response.status(500).json({ error: error.code });
+            return response
+                .status(500)
+                .json({ general: "Something went wrong, please try again" });
         });
 };
 
@@ -164,7 +165,7 @@ exports.uploadImage = (request, response) => {
             })
             // add image url to user's info in DB
             .then(() => {
-                const imageURL = `https://firebasestorage.googleapis.com/v0/b/${config.storageBucket}/o/${imageFileName}?alt=media`;
+                const imageURL = `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${imageFileName}?alt=media`;
 
                 return db
                     .doc(`/users/${request.user.handle}`)
@@ -265,9 +266,8 @@ exports.getUserDetails = (request, response) => {
                     .where("userHandle", "==", request.params.handle)
                     .orderBy("createdAt", "desc")
                     .get();
-            }
-
-            return response.status(404).json({ error: "User not found" });
+            } else
+                return response.status(404).json({ error: "User not found" });
         })
         .then(screamsSnapshot => {
             userDetails.screams = [];
