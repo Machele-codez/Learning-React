@@ -542,7 +542,7 @@ Then on a successful upload, we update the user's Firestore instance's imageURL 
 .then(() => {
     const imageURL = `https://firebasestorage.googleapis.com/v0/b/${config.storageBucket}/o/${imageFileName}?alt=media`;
 
-    return db.doc().collection(`/users/${request.user.handle}`).update({ imageURL });
+    return db.doc(`/users/${request.user.handle}`).update({ imageURL });
     // The reason why we can access request.user from here is that this route also uses
     // the firebase authentication middleware we built in which we define request.user
 })
