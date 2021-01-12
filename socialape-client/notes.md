@@ -95,6 +95,70 @@ In our Home component, we need to display screams adjacent to the user profile. 
     "proxy": "https://path.to/firebase/backend/base-api-url"
 }
 ```
+
 Now we just add the rest of the path when making our api calls using `axios`.
 
-So to get the screams, we make an API call using `axios`, to the endpoint that returns a JSON of all screams. Then we set a state variable called `screams` to hold the screams. The initial value of that (`screams`) state variable is `null`. So in the render method, we check if the `screams` state variable is null, in which case the request to Firestore is still loading and so we display a loader something. But if the `screams` state variable is populated (with screams), then we render the screams.    
+So to get the screams, we make an API call using `axios`, to the endpoint that returns a JSON of all screams. Then we set a state variable called `screams` to hold the screams. The initial value of that (`screams`) state variable is `null`. So in the render method, we check if the `screams` state variable is null, in which case the request to Firestore is still loading and so we display a loader something. But if the `screams` state variable is populated (with screams), then we render the screams.
+
+```jsx
+// initial state
+state = {
+    screams: null,
+};
+
+// just after component renders with state
+componentDidMount() {
+    // get screams from Firestore
+    axios
+        .get("/screams")
+        .then(res => {
+            // update state
+            this.setState({ screams: res.data });
+        })
+        .catch(err => console.error(err));
+}
+
+render() {
+    // JSX markup for screams
+    let recentScreamsMarkup = this.state.screams ? (
+        // loop through all screams in the state and return their markup
+        this.state.screams.map(scream => <p>{scream.body}</p>)
+    ) : (
+        // if no screams in state yet, probably request is not complete yet
+        <p>Loading...</p>
+    );
+
+    return (
+        <Grid container spacing={2}>
+            <Grid item sm={8} xs={12}>
+                {/* render screams */}
+                {recentScreamsMarkup}
+            </Grid>
+            <Grid item sm={4} xs={12}>
+                Profile..
+            </Grid>
+        </Grid>
+    );
+```
+
+## Styling the Scream Component
+
+The Material UI package provides an elegant way of styling components. Its higer-order `withStyles` component allows us to write all styles in an object and use that to access the styles through a prop named `classes`. So first we need to import `withStyles` and create our styles object.
+
+```js
+import withStyles from "@material-ui/core/styles/withStyles";
+
+const styles = {
+    card: {
+        display: "flex",
+    },
+};
+```
+
+Now that we have defined the styles, let's get withStyles to do the magic.
+
+```js
+export default withStyles(styles)(Scream);
+```
+
+So when exporting the component, we write it this way, passing the `styles` object we created to the higher order function (`withStyles`).
