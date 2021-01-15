@@ -162,3 +162,33 @@ export default withStyles(styles)(Scream);
 ```
 
 So when exporting the component, we write it this way, passing the `styles` object we created to the higher order function (`withStyles`).
+
+Now, to style a component using the properties defined in `card` found within the `styles` we defined, we just do this:
+
+```jsx
+<div className={classes.card}></div>
+```
+
+# Authentication
+
+## Logging in
+
+The user credentials are collected from the form and submitted to the Firebase authentication backend. The returned authentication token is stored in `localStorage` to authenticate subsequent requests.
+
+## Authentication State
+
+We need a way to "keep" the user logged in, that is, for as long as the JWT is valid. In `App.js` therefore, in the global scope of the module, we retrieve the token from `localStorage`. Then, using a package called `jwt-decode`, we decode the JWT to view its claims and other important info it contains. The expiry date is of essence at this stage, and it can be found in the decoded JWT as the `exp` property. It is a timestamp (in seconds). To know if the token is expired at the time it is accessed here then we need to compare it with the current datetime's timestamp since epoch. But keep in mind that since we'll use `new Date()` to access the current timestamp, it will be returned in milliseconds and not seconds as in the case of `exp`. So remember to convert `exp` into milliseconds when doing comparison. This is used to determine if the user is authenticated or not. The state of authentication of the user is stored in the `authenticated` variable.
+
+
+```js
+let authenticated;
+// get auth token from local storage
+const token = localStorage.FBIdToken;
+// check if token is authenticated
+if (token) {
+    const decodedToken = jwtDecode(token);
+
+    if (Date.now() > decodedToken.exp * 1000) authenticated = false;
+    else authenticated = true;
+}
+```
