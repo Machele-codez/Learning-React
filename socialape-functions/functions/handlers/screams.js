@@ -13,7 +13,7 @@ exports.getAllScreams = (request, response) => {
             // data is a QuerySnapshot Object
             data.forEach(doc => {
                 screams.push({
-                    screamID: doc.id, // id of the document - actually the scream id
+                    screamId: doc.id, // id of the document - actually the scream id
                     ...doc.data(),
                 });
             });

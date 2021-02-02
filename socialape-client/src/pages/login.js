@@ -1,7 +1,7 @@
 import React from "react";
 import PropTypes from "prop-types";
-import Link from "react-router-dom/Link";
-
+import { Link } from "react-router-dom";
+    
 import AppIcon from "../images/socialape-logo.png";
 
 import withStyles from "@material-ui/core/styles/withStyles";
@@ -50,7 +50,6 @@ class login extends React.Component {
         axios
             .post("/login", userCreds)
             .then(response => {
-                console.log(response.data);
                 // set loading state to false
                 this.setState({ loading: false });
                 // store auth token

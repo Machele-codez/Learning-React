@@ -11,6 +11,7 @@ import signup from "./pages/signup";
 
 // Components
 import Navbar from "./components/Navbar";
+import AuthRoute from "./util/AuthRoute";
 
 // Material UI
 import { ThemeProvider as MuiThemeProvider } from "@material-ui/core/styles";
@@ -28,28 +29,42 @@ const token = localStorage.FBIdToken;
 if (token) {
     const decodedToken = jwtDecode(token);
 
+    // if current datetime exceeds expiry date time, then set authenticated to false
     if (Date.now() > decodedToken.exp * 1000) {
+        if (window.location.pathname !== "/login") window.location.href = "/login";
         authenticated = false;
-        window.location.href = "/login";
     } else {
         authenticated = true;
     }
+    console.log(authenticated ? "authenticated" : "not authenticated");
 }
 
 class App extends React.Component {
     render() {
         return (
             <MuiThemeProvider theme={theme}>
-                <Router>
-                    <Navbar />
-                    <div className="container">
-                        <Switch>
-                            <Route exact path="/" component={home} />
-                            <Route exact path="/signup" component={signup} />
-                            <Route exact path="/login" component={login} />
-                        </Switch>
-                    </div>
-                </Router>
+                <div className="App">
+                    <Router>
+                        <Navbar />
+                        <div className="container">
+                            <Switch>
+                                <Route exact path="/" component={home} />
+                                <AuthRoute
+                                    exact
+                                    path="/login"
+                                    authenticated={authenticated}
+                                    component={login}
+                                />
+                                <AuthRoute
+                                    exact
+                                    path="/signup"
+                                    authenticated={authenticated}
+                                    component={signup}
+                                />
+                            </Switch>
+                        </div>
+                    </Router>
+                </div>
             </MuiThemeProvider>
         );
     }

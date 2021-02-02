@@ -179,7 +179,6 @@ The user credentials are collected from the form and submitted to the Firebase a
 
 We need a way to "keep" the user logged in, that is, for as long as the JWT is valid. In `App.js` therefore, in the global scope of the module, we retrieve the token from `localStorage`. Then, using a package called `jwt-decode`, we decode the JWT to view its claims and other important info it contains. The expiry date is of essence at this stage, and it can be found in the decoded JWT as the `exp` property. It is a timestamp (in seconds). To know if the token is expired at the time it is accessed here then we need to compare it with the current datetime's timestamp since epoch. But keep in mind that since we'll use `new Date()` to access the current timestamp, it will be returned in milliseconds and not seconds as in the case of `exp`. So remember to convert `exp` into milliseconds when doing comparison. This is used to determine if the user is authenticated or not. The state of authentication of the user is stored in the `authenticated` variable.
 
-
 ```js
 let authenticated;
 // get auth token from local storage
@@ -187,8 +186,65 @@ const token = localStorage.FBIdToken;
 // check if token is authenticated
 if (token) {
     const decodedToken = jwtDecode(token);
-
-    if (Date.now() > decodedToken.exp * 1000) authenticated = false;
-    else authenticated = true;
+    // check if expired
+    if (Date.now() > decodedToken.exp * 1000) {
+        if (window.location.pathname !== "/login")
+            // if not already on login page, then navigate to login page
+            window.location.href = "/login";
+        authenticated = false;
+    } else {
+        authenticated = true;
+    }
 }
+```
+
+If the token is invalid, i.e. the user is not authenticated and is therefore redirected to the login page.
+
+## Redirecting Authenticated Users
+
+When an authenticated user visits either the login or signup pages, it'll be good to redirect immediately to the home page since an authenticate wouldn't need to login / signup again.
+
+To achieve this we need to be able to check the value that the `authenticated` variable holds. If it is `true` (user is authenticated) then the component (signup or login page) is rendered. But if it is `false` then the browser redirects to the login page.
+
+So we create a custom `Route` component for this called `AuthRoute`. The `AuthRoute` is going to replace the default `Route` components we used for the login and signup routes.
+
+```jsx
+<Switch>
+    <Route exact path="/" component={home} />
+    <AuthRoute
+        exact
+        path="/signup"
+        authenticated={authenticated}
+        component={signup}
+    />
+    <AuthRoute
+        exact
+        path="/login"
+        authenticated={authenticated}
+        component={login}
+    />
+</Switch>
+```
+
+The `AuthRoute` is going to return a `Route` component, but since it has the `authenticated` variable and `component` to be rendered, as props, we can do our conditional rendering / redirect. So we define the `AuthRoute` component like so:
+
+```js
+import { Route, Redirect } from "react-router-dom";
+
+export default ({ component: Component, authenticated, ...rest }) => (
+    <Route
+        // pass all other props
+        {...rest}
+        render={props =>
+            // if authenticated then redirect
+            authenticated ? <Redirect to="/" /> : <Component {...props} />
+        }
+    />
+);
+```
+
+# Redux
+
+```
+npm i --save redux react-redux redux-thunk
 ```

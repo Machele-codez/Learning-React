@@ -105,12 +105,18 @@ exports.login = (request, response) => {
         .then(token => response.status(200).json({ token }))
         .catch(error => {
             console.error(error);
-            if (error.code === "auth/wrong-password")
+            if (
+                error.code === "auth/wrong-password" ||
+                error.code === "auth/user-not-found"
+            )
                 return response
                     .status(403)
                     .json({ general: "Wrong credentials, please try again" });
-
-            return response.status(500).json({ error: error.code });
+            else if (error.code === "auth/invalid-email")
+                return response
+                    .status(403)
+                    .json({ email: "Invalid" });
+            else return response.status(500).json({ error: error.code });
         });
 };
 
